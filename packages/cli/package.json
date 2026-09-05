@@ -16,7 +16,7 @@
     "dev": "tsc -p tsconfig.json --watch"
   },
   "dependencies": {
-    "commander": "^13.0.0"
+    "commander": "^15.0.0"
   },
   "optionalDependencies": {
     "@behalfid/egress-proxy": "*"
