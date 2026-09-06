@@ -77,7 +77,7 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # For tag pushes and dispatch, check out the explicit tag — never an
           # arbitrary default-branch HEAD under another tag name.
