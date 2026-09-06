@@ -83,7 +83,7 @@ jobs:
           fi
           echo "Integrity OK: tag=$TAG commit=$TAG_COMMIT version=$PKG_VERSION"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
           registry-url: "https://registry.npmjs.org"

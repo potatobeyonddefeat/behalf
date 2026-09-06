@@ -128,7 +128,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Resolved $PACKAGE_NAME@$VERSION (dir=$PACKAGE_DIR, tag=$DIST_TAG)"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: ".nvmrc"
           registry-url: "https://registry.npmjs.org"
