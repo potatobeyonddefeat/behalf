@@ -11,5 +11,6 @@ export function redactSecrets(value: string): string {
     .replace(/bhf_sk_[A-Za-z0-9._~+/-]+=*/g, "bhf_sk_[redacted]")
     .replace(/bhf_dev_[A-Za-z0-9._~+/-]+=*/g, "bhf_dev_[redacted]")
     .replace(/bhf_pass_[A-Za-z0-9._~+/-]+=*/g, "bhf_pass_[redacted]")
-    .replace(/whsec_[A-Za-z0-9._~+/-]+=*/g, "whsec_[redacted]");
+    .replace(/whsec_[A-Za-z0-9._~+/-]+=*/g, "whsec_[redacted]")
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted-email]");
 }

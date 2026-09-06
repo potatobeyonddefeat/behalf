@@ -243,11 +243,23 @@ export async function enqueueWebhookEvent(event: WebhookEvent) {
  * is not sufficient on its own to forge signatures — the pepper must also
  * be known. Generate the pepper with: openssl rand -hex 32
  */
+let warnedMissingSigningPepperInProduction = false;
+
 function deriveSigningKey(secretHash: string): string {
   const pepper = process.env.BEHALFID_WEBHOOK_SIGNING_PEPPER?.trim();
   if (pepper) {
     return crypto.createHmac("sha256", pepper).update(secretHash).digest("hex");
   }
+
+  if (process.env.NODE_ENV === "production" && !warnedMissingSigningPepperInProduction) {
+    warnedMissingSigningPepperInProduction = true;
+    console.error(
+      "[behalfid] BEHALFID_WEBHOOK_SIGNING_PEPPER is not set: webhook HMAC keys equal the " +
+        "secret_hash stored in Postgres, so DB read access alone is sufficient to forge signed " +
+        "webhook events. Generate one with: openssl rand -hex 32"
+    );
+  }
+
   return secretHash;
 }
 

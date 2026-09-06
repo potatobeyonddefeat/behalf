@@ -9,7 +9,9 @@ import { findActiveConsoleAdmin } from "@/lib/consoleAdmins";
 export const CONSOLE_COOKIE_NAME = "behalfid_console";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const UNSAFE_ADMIN_PASSWORDS = new Set(["change-me", "changeme", "password", "admin"]);
+// Keep in sync with UNSAFE_ADMIN_PASSWORDS in lib/env.ts (validateProductionEnv) —
+// this is the runtime gate; that one is the boot-time check.
+const UNSAFE_ADMIN_PASSWORDS = new Set(["change-me", "changeme", "password", "admin", "replace-this-password"]);
 
 function getAdminPassword() {
   const password = process.env.BEHALFID_ADMIN_PASSWORD?.trim() ?? "";

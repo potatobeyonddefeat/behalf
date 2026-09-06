@@ -5,6 +5,7 @@ import {
   findLogs
 } from "@/lib/repositories/verificationLogs";
 import { parseSmartLogQuery } from "@/lib/smartSearch/parseLogQuery";
+import { redactSecrets } from "@/lib/secretRedaction";
 
 export type LogRisk = "low" | "medium" | "high";
 
@@ -55,13 +56,11 @@ const MAX_LIMIT = 500;
 const APPROVAL_REASON_RE = /requires approval|approval required|approval before execution/i;
 const SEARCHABLE_FIELDS = ["requestId", "action", "vendor", "reason", "agentId", "permissionId"] as const;
 
+// Delegates to the shared redactor (lib/secretRedaction.ts) so log output and
+// Sentry scrubbing can't drift out of sync — this used to be a separate copy
+// of the same four regexes with no email/PII coverage.
 export function redactLogString(value: string) {
-  return value
-    .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
-    .replace(/bhf_sk_[A-Za-z0-9._~+/-]+=*/g, "bhf_sk_[redacted]")
-    .replace(/bhf_dev_[A-Za-z0-9._~+/-]+=*/g, "bhf_dev_[redacted]")
-    .replace(/bhf_pass_[A-Za-z0-9._~+/-]+=*/g, "bhf_pass_[redacted]")
-    .replace(/whsec_[A-Za-z0-9._~+/-]+=*/g, "whsec_[redacted]");
+  return redactSecrets(value);
 }
 
 function parsePositiveInt(value: string | null, fallback: number, max: number) {

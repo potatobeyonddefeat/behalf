@@ -6,7 +6,11 @@ const REQUIRED_PRODUCTION_ENV_BASE = [
   "NEXT_PUBLIC_APP_URL",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
-  "STRIPE_PRO_PRICE_ID"
+  "STRIPE_PRO_PRICE_ID",
+  // Without this, webhook HMAC signing falls back to the raw secret_hash stored
+  // in Postgres (see lib/webhooks.ts deriveSigningKey) — DB read access alone
+  // would be sufficient to forge signed webhook events.
+  "BEHALFID_WEBHOOK_SIGNING_PEPPER"
 ] as const;
 
 // Vercel's Upstash integration injects KV_REST_API_URL / KV_REST_API_TOKEN.
@@ -22,13 +26,16 @@ function hasRedisConfig() {
 }
 
 const OPTIONAL_PRODUCTION_ENV = [
-  "BEHALFID_WEBHOOK_SIGNING_PEPPER",
   "SENTRY_DSN",
   "BEHALFID_MFA_PEPPER",
   "BEHALFID_ALLOW_SHARED_ADMIN"
 ] as const;
 
 const UNSAFE_ADMIN_PASSWORDS = new Set(["change-me", "changeme", "password", "admin", "replace-this-password"]);
+
+// Below this length an admin password is flagged as weak even if it isn't a
+// known placeholder. Warning-only (not blocking) — see validateProductionEnv.
+const MIN_ADMIN_PASSWORD_LENGTH = 16;
 
 type EnvValidationResult = {
   valid: boolean;
@@ -100,9 +107,13 @@ export function validateProductionEnv(): EnvValidationResult {
     result.missingRequired.push("KV_REST_API_URL + KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN)");
   }
 
-  const adminPassword = process.env.BEHALFID_ADMIN_PASSWORD?.trim().toLowerCase();
-  if (adminPassword && UNSAFE_ADMIN_PASSWORDS.has(adminPassword)) {
+  const adminPassword = process.env.BEHALFID_ADMIN_PASSWORD?.trim() ?? "";
+  if (adminPassword && UNSAFE_ADMIN_PASSWORDS.has(adminPassword.toLowerCase())) {
     result.invalid.push("BEHALFID_ADMIN_PASSWORD must not use a placeholder or default value.");
+  } else if (adminPassword && adminPassword.length < MIN_ADMIN_PASSWORD_LENGTH) {
+    result.warnings.push(
+      `BEHALFID_ADMIN_PASSWORD is shorter than ${MIN_ADMIN_PASSWORD_LENGTH} characters; use a longer random value.`
+    );
   }
 
   validateHttpsUrl("NEXT_PUBLIC_APP_URL", result);
@@ -141,6 +152,15 @@ export function validateProductionEnv(): EnvValidationResult {
   return result;
 }
 
+// Fail-closed enforcement is opt-in on rollout so wiring this into the boot
+// path (see instrumentation.ts) cannot itself take a live deployment down the
+// first time it runs against a production env nobody has verified yet. Set
+// BEHALFID_ENFORCE_ENV_VALIDATION=true once `validateProductionEnv()` reports
+// `valid: true` for the real production environment, to make this fail closed.
+function isEnforcementEnabled() {
+  return process.env.BEHALFID_ENFORCE_ENV_VALIDATION === "true";
+}
+
 export function assertProductionEnv() {
   if (!isProduction() || globalForEnv.behalfEnvValidated) {
     return;
@@ -148,12 +168,24 @@ export function assertProductionEnv() {
 
   const result = validateProductionEnv();
   if (!result.valid) {
-    throw new Error(
-      [
-        "BehalfID production environment validation failed.",
-        result.missingRequired.length ? `Missing required env vars: ${result.missingRequired.join(", ")}.` : "",
-        result.invalid.length ? `Invalid env configuration: ${result.invalid.join(" ")}` : ""
-      ].filter(Boolean).join(" ")
+    const message = [
+      "BehalfID production environment validation failed.",
+      result.missingRequired.length ? `Missing required env vars: ${result.missingRequired.join(", ")}.` : "",
+      result.invalid.length ? `Invalid env configuration: ${result.invalid.join(" ")}` : ""
+    ].filter(Boolean).join(" ");
+
+    if (isEnforcementEnabled()) {
+      throw new Error(message);
+    }
+
+    console.error(
+      `[behalfid] ${message} Not blocking startup because BEHALFID_ENFORCE_ENV_VALIDATION is not "true"; ` +
+        "set it once this is resolved so misconfiguration fails closed instead of degrading silently."
+    );
+  } else if (!isEnforcementEnabled()) {
+    console.warn(
+      "[behalfid] BEHALFID_ENFORCE_ENV_VALIDATION is not \"true\"; production env validation is observability-only " +
+        "and will not block startup if it later becomes invalid."
     );
   }
 

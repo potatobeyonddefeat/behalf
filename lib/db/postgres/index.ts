@@ -24,6 +24,15 @@ function resolveDatabaseUrl(): string | undefined {
   return process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 }
 
+// Local/CI Postgres (see AGENTS.md) has no TLS, so this only applies in real
+// production — Supabase (the documented production datastore) supports TLS,
+// so this makes an already-expected property explicit instead of implicit.
+function requiresTls(): boolean {
+  return process.env.VERCEL_ENV
+    ? process.env.VERCEL_ENV === "production"
+    : process.env.NODE_ENV === "production";
+}
+
 /**
  * Returns a cached Drizzle client when DATABASE_URL or POSTGRES_URL is set.
  * Throws only when called without a URL — callers should guard with isPostgresConfigured().
@@ -47,7 +56,8 @@ export function getPostgresDb(): BehalfPostgresDb {
       max: 1,
       prepare: false,
       idle_timeout: 20,
-      connect_timeout: 10
+      connect_timeout: 10,
+      ssl: requiresTls() ? "require" : undefined
     });
   }
 

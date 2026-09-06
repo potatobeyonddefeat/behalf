@@ -10,8 +10,19 @@ function mfaEncryptionKey(): Buffer {
   const material =
     process.env.BEHALFID_MFA_PEPPER?.trim() ||
     process.env.BEHALFID_SETUP_TOKEN?.trim() ||
-    process.env.BEHALFID_ADMIN_PASSWORD?.trim() ||
-    "dev-only-mfa-pepper";
+    process.env.BEHALFID_ADMIN_PASSWORD?.trim();
+
+  if (!material) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "Refusing to encrypt/decrypt an MFA secret in production: BEHALFID_MFA_PEPPER, " +
+          "BEHALFID_SETUP_TOKEN, and BEHALFID_ADMIN_PASSWORD are all unset. Falling back to a " +
+          "hardcoded key would let anyone with repo access decrypt stored TOTP secrets."
+      );
+    }
+    return crypto.scryptSync("dev-only-mfa-pepper", "behalfid:mfa-enc:v1", 32);
+  }
+
   return crypto.scryptSync(material, "behalfid:mfa-enc:v1", 32);
 }
 

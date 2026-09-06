@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("production environment validation", () => {
   it("fails loudly for missing required production variables without leaking values", async () => {
@@ -38,6 +38,7 @@ describe("production environment validation", () => {
     vi.stubEnv("STRIPE_PRO_PRICE_ID", "price_test");
     vi.stubEnv("KV_REST_API_URL", "https://redis.upstash.io");
     vi.stubEnv("KV_REST_API_TOKEN", "token_test");
+    vi.stubEnv("BEHALFID_WEBHOOK_SIGNING_PEPPER", "a-long-random-webhook-pepper");
     vi.stubEnv("BEHALFID_PUBLIC_AGENT_CREATION", "true");
 
     const { validateProductionEnv } = await import("@/lib/env");
@@ -71,5 +72,61 @@ describe("production environment validation", () => {
     expect(result.missingRequired).toEqual(expect.arrayContaining([
       "KV_REST_API_URL + KV_REST_API_TOKEN (or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN)"
     ]));
+  });
+
+  it("warns (but does not invalidate) on a short, non-placeholder admin password", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("MONGODB_URI", "mongodb+srv://user:pass@example.mongodb.net/behalfid");
+    vi.stubEnv("BEHALFID_ADMIN_PASSWORD", "short1234");
+    vi.stubEnv("BEHALFID_SETUP_TOKEN", "a-long-random-setup-token");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://behalfid.com");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_test");
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
+    vi.stubEnv("STRIPE_PRO_PRICE_ID", "price_test");
+    vi.stubEnv("KV_REST_API_URL", "https://redis.upstash.io");
+    vi.stubEnv("KV_REST_API_TOKEN", "token_test");
+    vi.stubEnv("BEHALFID_WEBHOOK_SIGNING_PEPPER", "a-long-random-webhook-pepper");
+
+    const { validateProductionEnv } = await import("@/lib/env");
+    const result = validateProductionEnv();
+
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      "BEHALFID_ADMIN_PASSWORD is shorter than 16 characters; use a longer random value."
+    ]));
+  });
+});
+
+describe("assertProductionEnv enforcement rollout", () => {
+  beforeEach(() => {
+    // assertProductionEnv caches its result on globalThis (by design, so it only
+    // runs once per boot) — clear that between tests so each case exercises it fresh.
+    delete (globalThis as { behalfEnvValidated?: boolean }).behalfEnvValidated;
+    delete (globalThis as { behalfEnvWarnings?: Set<string> }).behalfEnvWarnings;
+  });
+
+  it("logs but does not throw on invalid config when enforcement is not enabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BEHALFID_ENFORCE_ENV_VALIDATION", "");
+    vi.stubEnv("BEHALFID_ADMIN_PASSWORD", "");
+    vi.stubEnv("BEHALFID_SETUP_TOKEN", "");
+    vi.stubEnv("MONGODB_URI", "");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { assertProductionEnv } = await import("@/lib/env");
+    expect(() => assertProductionEnv()).not.toThrow();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("throws on invalid config once enforcement is explicitly enabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BEHALFID_ENFORCE_ENV_VALIDATION", "true");
+    vi.stubEnv("BEHALFID_ADMIN_PASSWORD", "");
+    vi.stubEnv("BEHALFID_SETUP_TOKEN", "");
+    vi.stubEnv("MONGODB_URI", "");
+
+    const { assertProductionEnv } = await import("@/lib/env");
+    expect(() => assertProductionEnv()).toThrow(/production environment validation failed/i);
   });
 });
