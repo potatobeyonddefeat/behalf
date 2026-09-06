@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@behalfid/sdk": "^0.1.0"
+    "@behalfid/sdk": "^0.2.3"
   },
   "engines": {
     "node": ">=18"
