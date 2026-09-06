@@ -47,7 +47,7 @@
     "@emnapi/runtime": "^1.11.2",
     "@types/node": "^25.9.5",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
-    "@typescript-eslint/parser": "^8.46.0",
+    "@typescript-eslint/parser": "^8.67.0",
     "esbuild": "0.28.1",
     "eslint": "^9.39.4",
     "prettier": "^3.6.2",
